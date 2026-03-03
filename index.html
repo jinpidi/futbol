@@ -169,14 +169,17 @@
       <button id="start-btn" onclick="generateTeams()">Start (팀 나누기)</button>
     </div>
 
-    <div id="result-section" class="hidden">
+  <div id="result-section" class="hidden">
       <h1>🎉 팀 배정 결과</h1>
       <div id="teams-container"></div>
       
       <div class="share-box">
-        <input type="text" id="share-url" readonly>
+        <input type="text" id="share-url" readonly value="버튼을 누르면 링크가 복사됩니다.">
         <button onclick="copyUrl()">URL 복사</button>
       </div>
+      
+      <button id="reshuffle-btn" onclick="generateTeams()" style="background-color: #ff9800; margin-top: 20px;">다시 섞기 🔀</button>
+      
       <button id="reset-btn" onclick="resetApp()">다시 처음부터 만들기</button>
     </div>
   </div>
@@ -267,6 +270,7 @@
     }
 
     // 3. 결과 화면 렌더링
+// 3. 결과 화면 렌더링
     function showResults(teams, generateUrl = false) {
       document.getElementById('setup-section').classList.add('hidden');
       document.getElementById('result-section').classList.remove('hidden');
@@ -275,6 +279,8 @@
       container.innerHTML = '';
 
       teams.forEach((team, index) => {
+        team.sort((a, b) => a.localeCompare(b, 'ko-KR')); // 가나다순 정렬
+
         const teamCard = document.createElement('div');
         teamCard.className = 'team-card';
         teamCard.innerHTML = `
@@ -284,26 +290,47 @@
         container.appendChild(teamCard);
       });
 
-      // 공유용 URL 생성 (결과만 Base64로 인코딩하여 실력 정보는 노출되지 않음)
+      // 긴 URL을 미리 만들어두고 숨겨둠 (복사 버튼 누를 때 단축 진행)
       if (generateUrl) {
         const resultString = teams.map(t => t.join(',')).join('|');
-        // 한글 깨짐 방지를 위해 encodeURIComponent 사용
         const encodedData = btoa(encodeURIComponent(resultString));
-        const shareUrl = window.location.origin + window.location.pathname + "?data=" + encodedData;
-        document.getElementById('share-url').value = shareUrl;
+        const longUrl = window.location.origin + window.location.pathname + "?data=" + encodedData;
+        
+        const urlInput = document.getElementById('share-url');
+        urlInput.dataset.longUrl = longUrl; // 데이터 속성에 원본 URL 임시 저장
+        urlInput.value = "버튼을 누르면 단축 URL이 복사됩니다.";
       }
     }
 
-    // 4. URL 복사 기능
-    function copyUrl() {
+    // 4. URL 복사 및 단축 기능 (업그레이드)
+    async function copyUrl() {
       const urlInput = document.getElementById('share-url');
+      const longUrl = urlInput.dataset.longUrl;
+      
+      if (!longUrl) return;
+
+      urlInput.value = "단축 URL 생성 중...⏳";
+
+      try {
+        // 무료 단축 URL API 호출
+        const response = await fetch(`https://is.gd/create.php?format=json&url=${encodeURIComponent(longUrl)}`);
+        const data = await response.json();
+        
+        // 단축 성공 시 짧은 URL, 실패 시 원래 긴 URL 사용
+        const finalUrl = data.shorturl ? data.shorturl : longUrl;
+        urlInput.value = finalUrl;
+      } catch (error) {
+        console.warn("단축 API 호출 실패, 원본 URL을 사용합니다.");
+        urlInput.value = longUrl;
+      }
+
+      // 텍스트 복사 처리
       urlInput.select();
       document.execCommand('copy');
-      // 최신 브라우저용 Clipboard API (선택적)
       if(navigator.clipboard) {
         navigator.clipboard.writeText(urlInput.value);
       }
-      alert("공유 URL이 복사되었습니다!\n(공유받은 사람은 실력 등급 없이 결과만 볼 수 있습니다)");
+      alert("공유 URL이 복사되었습니다!\n이제 카톡에 붙여넣기 하세요.");
     }
 
     // 5. 초기화
